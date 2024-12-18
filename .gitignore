@@ -1,0 +1,12 @@
+/venv
+/__pycache__
+__pycache__
+.vscode
+credentials.json
+token.pickle
+*.log
+.pyc
+init.sh
+init-v2.sh
+config.py
+.DS_Store
