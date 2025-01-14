@@ -185,9 +185,9 @@ def run(input):
                                 type = "other",
                                 description = intf_obj["descr"]
                             )
-                            pluginfw.AddLog(f"Interface {devicename}.{intf_obj["name"]} added in NetBox")
+                            pluginfw.AddLog(f"Interface {devicename}.{intf_obj['name']} added in NetBox")
                         except pynetbox.RequestError as e:
-                            pluginfw.AddLog(f"Interface {devicename}.{intf_obj["name"]} failed to add in NetBox", pluginfw.ERROR)
+                            pluginfw.AddLog(f"Interface {devicename}.{intf_obj['name']} failed to add in NetBox", pluginfw.ERROR)
                             pluginfw.AddLog(str(e.error), pluginfw.ERROR)
                     # Check if management IP is assigned to management interface    
                     if nb.ipam.ip_addresses.get(address=mgmtIPcidr).assigned_object is None:
@@ -202,9 +202,9 @@ def run(input):
                             update_address = nb.ipam.ip_addresses.update(
                                 [add_obj]    
                             )
-                            pluginfw.AddLog(f"Associated {devicename}.{intf_obj["name"]} to {add_obj["address"]} in NetBox")
+                            pluginfw.AddLog(f"Associated {devicename}.{intf_obj['name']} to {add_obj['address']} in NetBox")
                         except pynetbox.RequestError as e:
-                            pluginfw.AddLog(f"Associated {devicename}.{intf_obj["name"]} to {add_obj["address"]} failed in NetBox", pluginfw.ERROR)
+                            pluginfw.AddLog(f"Associated {devicename}.{intf_obj['name']} to {add_obj['address']} failed in NetBox", pluginfw.ERROR)
                             pluginfw.AddLog(str(e.error), pluginfw.ERROR)
             
             # Update management IP on device
