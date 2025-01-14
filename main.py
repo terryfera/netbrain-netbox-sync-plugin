@@ -18,26 +18,31 @@ def run(input):
         
     ''' 
     
+    # Parse plugin input
     input_json = json.loads(input)
     end_point = input_json["end_point"]
     token = input_json["token"]
     default_mask = input_json["default_mask"]
     device_group = input_json["device_group"]
+    default_site = input_json["default_site"]
     
     
     nb = pynetbox.api(
         end_point,
         token=token,
     )
+    nb.http_session.verify = False
     
     device_list = datamodel.GetDeviceIdsFromDeviceGroup(device_group)
-
-    #pluginfw.AddLog(str(device_list), pluginfw.INFO)
     
     for device in device_list:
+        pluginfw.AddLog(f"---------")
         dev_obj = datamodel.GetDeviceObjectById(device)
-        #pluginfw.AddLog(str(dev_obj), pluginfw.INFO)
         devicename = dev_obj["name"]
+        #pluginfw.AddLog(str(dev_obj), pluginfw.DEBUG) # Print all device details for debugging
+        pluginfw.AddLog(f"{devicename} started, adding dependencies")
+        
+        # Populate device details from NetBrain device object
         mgmtIP = dev_obj["mgmtIP"]
         mgmtIntf = dev_obj["mgmtIntf"]
         vendor = dev_obj["vendor"]
@@ -47,8 +52,17 @@ def run(input):
         mainTypeName = dev_obj["mainTypeName"]
         model = dev_obj["model"]
         
+        # Set site for unassigned devices
+        if len(siteName) == 0:
+            siteName = default_site
+  
+        # Create slugs
+        vendorSlug = vendor.replace(" ", "_")
+        subTypeNameSlug = subTypeName.replace(" ", "_")
+        mainTypeNameSlug = mainTypeName.replace(" ", "_")
+        siteNameSlug = siteName.replace(" ", "_")
+ 
         # Get Management IP with Mask
-        
         mgmtIP_details = oneiptable.GetOneIpTableItem(mgmtIP)
         if len(mgmtIP_details) > 0:
             mask_search = re.search(cidr_regex, mgmtIP_details[0]["lanSegment"])
@@ -58,18 +72,12 @@ def run(input):
             mgmtCIDR = default_mask
             
         mgmtIPcidr = f"{mgmtIP}/{mgmtCIDR}"
-        pluginfw.AddLog(f"MgmtIP details: {mgmtIPcidr}")
+        #pluginfw.AddLog(f"MgmtIP details: {mgmtIPcidr}", pluginfw.DEBUG)
         
-        # Create slugs
-        vendorSlug = vendor.replace(" ", "_")
-        subTypeNameSlug = subTypeName.replace(" ", "_")
-        mainTypeNameSlug = mainTypeName.replace(" ", "_")
-        siteNameSlug = siteName.replace(" ", "_")
-        
-        # Check if device exists
+        # Add device logic
         if nb.dcim.devices.get(devicename) is None:
-            pluginfw.AddLog(f"Adding {devicename} started")
-            # check if role exists
+            # Add dependencies for devices: role, vendor, device type, site
+            # Check if role exists
             if nb.dcim.device_roles.get(slug=mainTypeNameSlug) is None:
                 try:
                     nb.dcim.device_roles.create(
@@ -82,7 +90,7 @@ def run(input):
                     pluginfw.AddLog(str(e.error), pluginfw.ERROR)
             else:
                 pluginfw.AddLog(f"Role {mainTypeName} already exists")
-            # check if vendor exists
+            # check if Vendor exists
             if nb.dcim.manufacturers.get(slug=vendorSlug) is None:
                 try:
                     nb.dcim.manufacturers.create(
@@ -95,7 +103,7 @@ def run(input):
                     pluginfw.AddLog(str(e.error), pluginfw.ERROR)
             else:
                 pluginfw.AddLog(f"Manufacturer {vendor} already exists")
-            # check if device type exists
+            # Check if device type exists
             if nb.dcim.device_types.get(slug=subTypeNameSlug) is None:
                 try:
                     nb.dcim.device_types.create(
@@ -112,6 +120,7 @@ def run(input):
                 pluginfw.AddLog(f"Device Type {subTypeName} already exists")
           
             # check if site exists
+            pluginfw.AddLog(f"Adding site {siteName} with slug {siteNameSlug}")
             if nb.dcim.sites.get(slug=siteNameSlug) is None:
                 try:
                     nb.dcim.sites.create(
@@ -163,13 +172,11 @@ def run(input):
 
             # Loop through all interfaces on the device
             for intf in dev_intfs:
-                #pluginfw.AddLog(str(intf), pluginfw.INFO)
                 intf_obj = datamodel.GetInterfaceObjectById(intf["interface id"], intf["interface type"])
-                #pluginfw.AddLog(str(intf_obj), pluginfw.INFO)
-                
+
                 # Check if the interface is the management interface
                 if intf_obj["name"] == dev_obj["mgmtIntf"]:
-                    # Create Device Interfaces
+                    # Create Device Interface for the management interface
                     if nb.dcim.interfaces.get(name=dev_obj["mgmtIntf"], device_id=nb.dcim.devices.get(name=devicename).id) is None:
                         try:
                             netbox_intf = nb.dcim.interfaces.create(
@@ -182,7 +189,7 @@ def run(input):
                         except pynetbox.RequestError as e:
                             pluginfw.AddLog(f"Interface {devicename}.{intf_obj["name"]} failed to add in NetBox", pluginfw.ERROR)
                             pluginfw.AddLog(str(e.error), pluginfw.ERROR)
-                        
+                    # Check if management IP is assigned to management interface    
                     if nb.ipam.ip_addresses.get(address=mgmtIPcidr).assigned_object is None:
                         # Assign IP Address to Interface
                         pluginfw.AddLog(f"Assign address to interface ip:{mgmtIPcidr} device:{devicename} interface:{mgmtIntf}", pluginfw.INFO)
@@ -190,8 +197,6 @@ def run(input):
                         add_obj.assigned_object_type = "dcim.interface"
                         add_obj.assigned_object = nb.dcim.interfaces.get(name=dev_obj["mgmtIntf"], device_id=nb.dcim.devices.get(name=devicename).id)
                         add_obj.assigned_object_id = nb.dcim.interfaces.get(name=dev_obj["mgmtIntf"], device_id=nb.dcim.devices.get(name=devicename).id).id
-                        
-                        #pluginfw.AddLog(str(add_obj), pluginfw.INFO)
                         
                         try:
                             update_address = nb.ipam.ip_addresses.update(
@@ -202,7 +207,7 @@ def run(input):
                             pluginfw.AddLog(f"Associated {devicename}.{intf_obj["name"]} to {add_obj["address"]} failed in NetBox", pluginfw.ERROR)
                             pluginfw.AddLog(str(e.error), pluginfw.ERROR)
             
-            # Update management IP
+            # Update management IP on device
             nb_devobj = nb.dcim.devices.get(name=devicename)
             if nb_devobj.primary_ip4 is None:
                 nb_devobj.primary_ip4 = nb.ipam.ip_addresses.get(address=mgmtIPcidr).id

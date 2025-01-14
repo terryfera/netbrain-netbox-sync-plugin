@@ -10,3 +10,4 @@ init.sh
 init-v2.sh
 config.py
 .DS_Store
+/netbox-docker
