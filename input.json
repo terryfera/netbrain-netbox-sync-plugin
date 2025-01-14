@@ -1,0 +1,6 @@
+{
+    "end_point": "http://172.16.100.5:8080",
+    "token": "73bc04ccece7764ad63373d30ac42e502b9axxxx",
+    "default_mask": "32",
+    "device_group": "All Devices"
+}
