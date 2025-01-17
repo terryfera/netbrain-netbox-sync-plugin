@@ -39,7 +39,7 @@ def run(input):
         pluginfw.AddLog(f"---------")
         dev_obj = datamodel.GetDeviceObjectById(device)
         devicename = dev_obj["name"]
-        #pluginfw.AddLog(str(dev_obj), pluginfw.DEBUG) # Print all device details for debugging
+        pluginfw.AddLog(str(dev_obj), pluginfw.DEBUG) # Print all device details for debugging
         pluginfw.AddLog(f"{devicename} started, adding dependencies")
         
         # Populate device details from NetBrain device object
@@ -52,10 +52,19 @@ def run(input):
         mainTypeName = dev_obj["mainTypeName"]
         model = dev_obj["model"]
         
+        
         # Set site for unassigned devices
         if len(siteName) == 0:
             siteName = default_site
-  
+            
+        # Get Serial serialNumber
+        
+        if "sn" in dev_obj:
+            serialNumber = dev_obj["sn"]
+        else:
+            serialNumber = "" # for devices that have no serial number
+        
+        
         # Create slugs
         vendorSlug = vendor.replace(" ", "_")
         subTypeNameSlug = subTypeName.replace(" ", "_")
@@ -156,15 +165,35 @@ def run(input):
                         role = nb.dcim.device_roles.get(slug=mainTypeNameSlug).id,
                         site = nb.dcim.sites.get(slug=siteNameSlug).id,
                         manufacturer = nb.dcim.manufacturers.get(slug=vendorSlug).id,
+                        serial = serialNumber,
                         status = "active"
                     )
                     pluginfw.AddLog(f"Device {devicename} added in NetBox")
                 except pynetbox.RequestError as e:
                     pluginfw.AddLog(f"Device {devicename} failed to added in NetBox", pluginfw.ERROR)
                     pluginfw.AddLog(str(e.error), pluginfw.ERROR)
+            elif nb.dcim.devices.get(name=devicename): # Update already existing device in netbox
+                try:
+                    netbox_devobj = nb.dcim.devices.get(name=devicename)
+                    
+                    # Update device properties
+                    netbox_devobj.serial = serialNumber
+                    netbox_devobj.device_type = nb.dcim.device_types.get(slug=subTypeNameSlug).id
+                    netbox_devobj.site = nb.dcim.sites.get(slug=siteNameSlug).id
+                    netbox_devobj.location = location
+                    netbox_devobj.role = nb.dcim.device_roles.get(slug=mainTypeNameSlug).id
+                    
+                    # Send updated device to netbox
+                    netbox_dev = nb.dcim.devices.update(
+                        [netbox_devobj]    
+                    )
+                    pluginfw.AddLog(f"Device {devicename} updated in NetBox")
+                except pynetbox.RequestError as e:
+                    pluginfw.AddLog(f"Device {devicename} failed to updated in NetBox", pluginfw.ERROR)
+                    pluginfw.AddLog(str(e.error), pluginfw.ERROR)
             else:
                 pluginfw.AddLog(f"Device {devicename} already exists")
-        
+            
         
             # Get Device Interfaces and check if management interface exists
         
