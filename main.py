@@ -39,7 +39,7 @@ def run(input):
         pluginfw.AddLog(f"---------")
         dev_obj = datamodel.GetDeviceObjectById(device)
         devicename = dev_obj["name"]
-        pluginfw.AddLog(str(dev_obj), pluginfw.DEBUG) # Print all device details for debugging
+        #pluginfw.AddLog(str(dev_obj), pluginfw.DEBUG) # Print all device details for debugging
         pluginfw.AddLog(f"{devicename} started, adding dependencies")
         
         # Populate device details from NetBrain device object
@@ -129,7 +129,7 @@ def run(input):
                 pluginfw.AddLog(f"Device Type {subTypeName} already exists")
           
             # check if site exists
-            pluginfw.AddLog(f"Adding site {siteName} with slug {siteNameSlug}")
+            #pluginfw.AddLog(f"Adding site {siteName} with slug {siteNameSlug}")
             if nb.dcim.sites.get(slug=siteNameSlug) is None:
                 try:
                     nb.dcim.sites.create(
@@ -145,13 +145,27 @@ def run(input):
                 
             # check if mgmtIP exists
             
-            if nb.ipam.ip_addresses.get(address=mgmtIPcidr) is None:
+            if nb.ipam.ip_addresses.get(address=mgmtIP) is None:
                 try:
                     nb.ipam.ip_addresses.create(
                         address=mgmtIPcidr
                     )
+                    pluginfw.AddLog(f"IP Address {mgmtIPcidr} added in NetBox")
                 except pynetbox.RequestError as e:
                     pluginfw.AddLog(f"IP Address {mgmtIPcidr} failed to added in NetBox", pluginfw.ERROR)
+                    pluginfw.AddLog(str(e.error), pluginfw.ERROR)
+            elif str(nb.ipam.ip_addresses.get(address=mgmtIP)) != mgmtIPcidr:
+                # Update mgmt IP mask if it has changed
+                ip_addr_obj = nb.ipam.ip_addresses.get(address=mgmtIP)
+                old_ip_addr = ip_addr_obj.address
+                ip_addr_obj.address = mgmtIPcidr
+                try:
+                    nb.ipam.ip_addresses.update(
+                        [ip_addr_obj]
+                    )
+                    pluginfw.AddLog(f"IP Address {mgmtIPcidr} updated in NetBox, previously {old_ip_addr}")
+                except pynetbox.RequestError as e:
+                    pluginfw.AddLog(f"IP Address {mgmtIPcidr} failed to update in NetBox", pluginfw.ERROR)
                     pluginfw.AddLog(str(e.error), pluginfw.ERROR)
             else:
                 pluginfw.AddLog(f"IP Address {mgmtIPcidr} already exists")
@@ -180,7 +194,7 @@ def run(input):
                     netbox_devobj.serial = serialNumber
                     netbox_devobj.device_type = nb.dcim.device_types.get(slug=subTypeNameSlug).id
                     netbox_devobj.site = nb.dcim.sites.get(slug=siteNameSlug).id
-                    netbox_devobj.location = location
+                    #netbox_devobj.location = location
                     netbox_devobj.role = nb.dcim.device_roles.get(slug=mainTypeNameSlug).id
                     
                     # Send updated device to netbox
@@ -219,7 +233,7 @@ def run(input):
                             pluginfw.AddLog(f"Interface {devicename}.{intf_obj['name']} failed to add in NetBox", pluginfw.ERROR)
                             pluginfw.AddLog(str(e.error), pluginfw.ERROR)
                     # Check if management IP is assigned to management interface    
-                    if nb.ipam.ip_addresses.get(address=mgmtIPcidr).assigned_object is None:
+                    if nb.ipam.ip_addresses.get(address=mgmtIP).assigned_object is None: # Check for IP address without CIDR to avoid not found issue if mask isn't updated
                         # Assign IP Address to Interface
                         pluginfw.AddLog(f"Assign address to interface ip:{mgmtIPcidr} device:{devicename} interface:{mgmtIntf}", pluginfw.INFO)
                         add_obj = nb.ipam.ip_addresses.get(address=mgmtIPcidr)
