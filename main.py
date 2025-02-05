@@ -7,6 +7,7 @@ import re
 import json
 
 cidr_regex = re.compile(r'^.*\/(\d{2})$')
+f5_serial_regex = re.compile(r'^Serial:\s(.+)\sMAC')
 
 def run(input): 
     ''' 
@@ -61,6 +62,14 @@ def run(input):
         
         if "sn" in dev_obj:
             serialNumber = dev_obj["sn"]
+            if len(serialNumber) > 50: # Find serials over 50 characters, mostly F5s
+                serial_search = re.search(f5_serial_regex, serialNumber) # For F5's search for just the serial in the serial field
+                if serial_search:
+                    serialNumber = serial_search.group(1)
+                else: # For other formats, truncate at 50 characters
+                    serialNumber = serialNumber[:50]
+                
+                    
         else:
             serialNumber = "" # for devices that have no serial number
         
@@ -70,7 +79,7 @@ def run(input):
         subTypeNameSlug = subTypeName.replace(" ", "_")
         mainTypeNameSlug = mainTypeName.replace(" ", "_")
         siteNameSlug = siteName.replace(" ", "_")
- 
+
         # Get Management IP with Mask
         mgmtIP_details = oneiptable.GetOneIpTableItem(mgmtIP)
         if len(mgmtIP_details) > 0:
@@ -127,7 +136,7 @@ def run(input):
                     pluginfw.AddLog(str(e.error), pluginfw.ERROR)
             else:
                 pluginfw.AddLog(f"Device Type {subTypeName} already exists")
-          
+  
             # check if site exists
             #pluginfw.AddLog(f"Adding site {siteName} with slug {siteNameSlug}")
             if nb.dcim.sites.get(slug=siteNameSlug) is None:
@@ -194,7 +203,6 @@ def run(input):
                     netbox_devobj.serial = serialNumber
                     netbox_devobj.device_type = nb.dcim.device_types.get(slug=subTypeNameSlug).id
                     netbox_devobj.site = nb.dcim.sites.get(slug=siteNameSlug).id
-                    #netbox_devobj.location = location
                     netbox_devobj.role = nb.dcim.device_roles.get(slug=mainTypeNameSlug).id
                     
                     # Send updated device to netbox
@@ -247,7 +255,7 @@ def run(input):
                             )
                             pluginfw.AddLog(f"Associated {devicename}.{intf_obj['name']} to {add_obj['address']} in NetBox")
                         except pynetbox.RequestError as e:
-                            pluginfw.AddLog(f"Associated {devicename}.{intf_obj['name']} to {add_obj['address']} failed in NetBox", pluginfw.ERROR)
+                            pluginfw.AddLog(f"Associating {devicename}.{intf_obj['name']} to {add_obj['address']} failed in NetBox", pluginfw.ERROR)
                             pluginfw.AddLog(str(e.error), pluginfw.ERROR)
             
             # Update management IP on device
