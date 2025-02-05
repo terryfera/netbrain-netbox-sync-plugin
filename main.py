@@ -57,18 +57,17 @@ def run(input):
         if len(siteName) == 0:
             siteName = default_site
             
-        # Get Serial serialNumber
-        if "sn" in dev_obj:
-            serialNumber = dev_obj["sn"]
-            if len(serialNumber) > 50: # Find serials over 50 characters, mostly F5s
-                serial_search = re.search(f5_serial_regex, serialNumber) # For F5's search for just the serial in the serial field
-                if serial_search: 
-                    serialNumber = serial_search.group(1)
-                else: # For other formats, truncate at 50 characters
-                    serialNumber = serialNumber[:50]
-        else:
-            serialNumber = "" # for devices that have no serial number
-        
+        # Get Serial
+        serialNumber = dev_obj["sn"] if dev_obj.get("sn") else ""
+        if vendor == "F5":
+            serial_search = re.search(f5_serial_regex, serialNumber) # For F5's search for just the serial in the serial field
+            if serial_search: 
+                serialNumber = serial_search.group(1)
+            else: # If serial number couldn't be found, truncate at 50 characters
+                serialNumber = serialNumber[:50]
+        elif len(serialNumber) > 50: # Find serials over 50 characters that aren't F5s and truncate them to 50 characters
+            serialNumber = serialNumber[:50]
+
         # Check if any of the device properties are empty before creating the device
         if not [x for x in (mgmtIP, mgmtIntf, vendor, subTypeName, siteName, mainTypeName, model) if x is None]:
             
