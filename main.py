@@ -2,23 +2,20 @@ from netbrain.sysapi import datamodel
 from netbrain.sysapi import devicedata 
 from netbrain.sysapi import pluginfw 
 from netbrain.sysapi import oneiptable
-import pynetbox
 import re
 import json
+import socket
+
+try:
+    import pynetbox
+except ImportError as e:
+    pluginfw.AddLog(f"Failed to import pynetbox module on {socket.gethostname()}", pluginfw.ERROR)
+    pluginfw.AddLog(str(e.error), pluginfw.ERROR)
 
 cidr_regex = re.compile(r'^.*\/(\d{2})$')
 f5_serial_regex = re.compile(r'^Serial:\s(.+)\sMAC')
 
 def run(input): 
-    ''' 
-        this is the plugin entry point. 
-        todo: write the real logic in this function. 
-        
-        return True if the everything is OK. 
-        return False if some error occurred. 
-        
-    ''' 
-    
     # Parse plugin input
     input_json = json.loads(input)
     end_point = input_json["end_point"]
@@ -41,7 +38,7 @@ def run(input):
         pluginfw.AddLog(f"---------")
         dev_obj = datamodel.GetDeviceObjectById(device)
         devicename = dev_obj["name"]
-        #pluginfw.AddLog(str(dev_obj), pluginfw.DEBUG) # Print all device details for debugging
+        pluginfw.AddLog(str(dev_obj), pluginfw.DEBUG) # Print all device details for debugging
         pluginfw.AddLog(f"{devicename} started, adding dependencies")
         
         # Populate device details from NetBrain device object, if not found, set to none
@@ -76,6 +73,7 @@ def run(input):
             subTypeNameSlug = subTypeName.replace(" ", "_")
             mainTypeNameSlug = mainTypeName.replace(" ", "_")
             siteNameSlug = siteName.replace(" ", "_")
+            modelSlug = model.replace(" ", "_")
     
             # Get Management IP with Mask
             mgmtIP_details = oneiptable.GetOneIpTableItem(mgmtIP)
@@ -119,20 +117,20 @@ def run(input):
                 else:
                     pluginfw.AddLog(f"Manufacturer {vendor} already exists")
                 # Check if device type exists
-                if nb.dcim.device_types.get(slug=subTypeNameSlug) is None:
+                if nb.dcim.device_types.get(slug=modelSlug) is None:
                     try:
                         nb.dcim.device_types.create(
-                            name=subTypeName,
+                            name=model,
                             manufacturer=nb.dcim.manufacturers.get(slug=vendorSlug).id,
                             model=model,
-                            slug=subTypeNameSlug
+                            slug=modelSlug
                         )
-                        pluginfw.AddLog(f"Device Type {subTypeName} added in NetBox")
+                        pluginfw.AddLog(f"Device Type (Model) {model} added in NetBox")
                     except pynetbox.RequestError as e:
-                        pluginfw.AddLog(f"Device Type {subTypeName} failed to added in NetBox", pluginfw.ERROR)
+                        pluginfw.AddLog(f"Device Type (Model) {model} failed to added in NetBox", pluginfw.ERROR)
                         pluginfw.AddLog(str(e.error), pluginfw.ERROR)
                 else:
-                    pluginfw.AddLog(f"Device Type {subTypeName} already exists")
+                    pluginfw.AddLog(f"Device Type (Model) {vendor} {model} already exists")
     
                 # check if site exists
                 #pluginfw.AddLog(f"Adding site {siteName} with slug {siteNameSlug}")
@@ -181,7 +179,7 @@ def run(input):
                     try:
                         netbox_dev = nb.dcim.devices.create(
                             name = devicename,
-                            device_type = nb.dcim.device_types.get(slug=subTypeNameSlug).id,
+                            device_type = nb.dcim.device_types.get(slug=model).id,
                             role = nb.dcim.device_roles.get(slug=mainTypeNameSlug).id,
                             site = nb.dcim.sites.get(slug=siteNameSlug).id,
                             manufacturer = nb.dcim.manufacturers.get(slug=vendorSlug).id,
@@ -201,7 +199,7 @@ def run(input):
                         
                         # Update device properties
                         netbox_devobj.serial = serialNumber
-                        netbox_devobj.device_type = nb.dcim.device_types.get(slug=subTypeNameSlug).id
+                        netbox_devobj.device_type = nb.dcim.device_types.get(slug=modelSlug).id
                         netbox_devobj.site = nb.dcim.sites.get(slug=siteNameSlug).id
                         netbox_devobj.role = nb.dcim.device_roles.get(slug=mainTypeNameSlug).id
                         
