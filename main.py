@@ -49,6 +49,7 @@ def run(input):
         siteName = datamodel.GetDeviceSiteName(devicename)
         mainTypeName = dev_obj["mainTypeName"] if dev_obj.get("mainTypeName") else None
         model = dev_obj["model"] if dev_obj.get("model") else None
+        software_version = dev_obj["ver"] if dev_obj.get("ver") else None
         
         # Set site for unassigned devices
         if len(siteName) == 0:
@@ -74,6 +75,7 @@ def run(input):
             mainTypeNameSlug = mainTypeName.replace(" ", "_")
             siteNameSlug = siteName.replace(" ", "_")
             modelSlug = model.replace(" ", "_")
+            swverSlug = software_version.replace(" ", "_").replace(".", "_").replace("(", "-").replace(")", "-") if software_version else None
     
             # Get Management IP with Mask
             mgmtIP_details = oneiptable.GetOneIpTableItem(mgmtIP)
@@ -147,8 +149,24 @@ def run(input):
                 else:
                     pluginfw.AddLog(f"Site {siteName} already exists")
                     
-                # check if mgmtIP exists
+                # Check if software version exists as platform    
+                if software_version is not None:
+                    if nb.dcim.platforms.get(slug=swverSlug) is None:
+                        try:
+                            nb.dcim.platforms.create(
+                                name=software_version,
+                                slug=swverSlug,
+                                manufacturer = nb.dcim.manufacturers.get(slug=vendorSlug).id
+                            )
+                            pluginfw.AddLog(f"Platform {software_version} added in NetBox")
+                        except pynetbox.RequestError as e:
+                            pluginfw.AddLog(f"Platform {software_version} failed to added in NetBox", pluginfw.ERROR)
+                            pluginfw.AddLog(str(e.error), pluginfw.ERROR)
+                    else:
+                        pluginfw.AddLog(f"Platform {software_version} already exists")
                 
+                
+                # check if mgmtIP exists
                 if nb.ipam.ip_addresses.get(address=mgmtIP) is None:
                     try:
                         nb.ipam.ip_addresses.create(
@@ -184,6 +202,7 @@ def run(input):
                             site = nb.dcim.sites.get(slug=siteNameSlug).id,
                             manufacturer = nb.dcim.manufacturers.get(slug=vendorSlug).id,
                             serial = serialNumber,
+                            platform = nb.dcim.platforms.get(slug=swverSlug).id if software_version else None,
                             status = "active"
                         )
                         if netbox_dev: # Validate that device was added to netbox by checking that netbox responded with the object
@@ -202,6 +221,8 @@ def run(input):
                         netbox_devobj.device_type = nb.dcim.device_types.get(slug=modelSlug).id
                         netbox_devobj.site = nb.dcim.sites.get(slug=siteNameSlug).id
                         netbox_devobj.role = nb.dcim.device_roles.get(slug=mainTypeNameSlug).id
+                        if software_version is not None:
+                            netbox_devobj.platform = nb.dcim.platforms.get(slug=swverSlug).id
                         
                         # Send updated device to netbox
                         netbox_dev = nb.dcim.devices.update(
