@@ -3,5 +3,6 @@
     "token": "73bc04ccece7764ad63373d30ac42e502b9a7d0f",
     "default_mask": "32",
     "device_group": "All Devices",
-    "default_site": "Unassigned"
+    "default_site": "Unassigned",
+    "data_source_value": "NetBrain"
 }
